@@ -98,7 +98,8 @@ export class AnalysisTool {
             'tsconfig.json', 'tsconfig.json/**', '**/tsconfig.json', '**/tsconfig.json/**',
             'e2e', 'e2e/**', '**/e2e', '**/e2e/**',
             'jquery.js', 'jquery.js/**', '**/jquery.js', '**/jquery.js/**',
-            'angular.js', 'angular.js/**', '**/angular.js', '**/angular.js/**'
+            'angular.js', 'angular.js/**', '**/angular.js', '**/angular.js/**',
+            'dist/**'
         ];
         allIgnoreGlobs = [...gitignore(rootpath + "/.gitignore"), ...defaultIgnoreGlobs].filter((pattern) => {
             return !pattern.startsWith("!");
@@ -186,9 +187,14 @@ export class AnalysisTool {
             (filename: string, data: string) => this.checkAngularVersion(filename, data),
             (filename: string, data: string) => this.checkFileForScriptingLanguage(filename, data),
             (filename: string, data: string) => this.checkFileForComponent(filename, data),
-        ];
-        if (currentPath.substr(-3) === '.js' || currentPath.substr(-3) === '.ts' || currentPath.substr(-5) === '.html' || currentPath.substr(-5) === '.json') {
+        ]; // NOTE: why is json relevant?
+        if (currentPath.substr(-3) === '.js' || currentPath.substr(-3) === '.ts' || currentPath.substr(-5) === '.html'/* || currentPath.substr(-5) === '.json'*/) {
+            if (currentPath.endsWith('.d.ts')) {
+                return;
+            }
+
             this.analysisDetails.relevantFilesOrFolderCount++;
+
             for (let test of tests) {
                 test(currentPath, fs.readFileSync(currentPath, "utf8"));
             }
@@ -259,13 +265,17 @@ export class AnalysisTool {
     }
 
     checkFileForComponent(filename: string, fileData: string) {
-        if (fileData.match(/\.controller\(/)) {
-            this.analysisDetails.controllersCount++;
+        const controllerMatches = fileData.match(/\.controller\(/g); // NOTE: had been 2 regex match tests with 1 redundant
+        const componentMatches = fileData.match(/@Component|component\(/g); // NOTE: factor in @Component decorator
+
+        if (controllerMatches) { // NOTE: for both of these, previously assumed only 1 per file. Our JS module files import + feed them them into the module
+            this.analysisDetails.controllersCount += controllerMatches.length;
             this.pushValueOnKey(this.analysisDetails.mapOfFilesToConvert, filename, " controller");
         }
-        if (fileData.match(/\.component\(/) || fileData.match(/component\(/)) {
-            this.analysisDetails.componentCount++;
-            this.pushValueOnKey(this.analysisDetails.mapOfFilesToConvert, filename, " AngularJS component");
+
+        if (componentMatches) {
+            this.analysisDetails.componentCount += componentMatches.length;
+            //this.pushValueOnKey(this.analysisDetails.mapOfFilesToConvert, filename, " AngularJS component"); // NOTE: why is this reported as something to fix? The desired target is a component.
         }
     }
 
